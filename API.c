@@ -5,315 +5,348 @@
 #include <malloc.h>
 
 #define STRING_MAX_LENGTH 256
-#define DIM_RICETTARIO ('Z' - 'A' + 1) * 2 + 1    //caratteri dalla 'a' alla 'z' + slot per '_' e numeri
+#define DIM_RECETTEAR ('Z' - 'A' + 1) * 2 + 1    //chars from 'a' to 'z' + slot for '_' and numbers
 
-typedef struct ING{
-    char *nome;
+/**
+ * Ingredient struct
+ * name: string of the name of the ingredient
+ * quantity: amount of the ingredient for the recipe
+ * next: pointer to the next ingredient in the recipe
+ */
+typedef struct ING {
+    char *name;
     int quantity;
     struct ING *next;
-} ingrediente;
+} ingredient;
 
-typedef struct RIC{
-    char *nome;
-    ingrediente *ing;
-    struct RIC *padre;
-    struct RIC *left;
-    struct RIC *right;
-} ricetta;
+/**
+ * Recipe struct
+ * name: string of the name of the recipe
+ * ing: list of the ingredients, in alphabetic order
+ * father: pointer to the father of the current recipe in the tree
+ * left: pointer to the recipe that comes before in alphabetic order
+ * right: pointer to the recipe that comes after in alphabetic order
+ */
+typedef struct REC {
+    char *name;
+    ingredient *ing;
+    struct REC *father;
+    struct REC *left;
+    struct REC *right;
+} recipe;
 
-typedef struct LOT{
+/**
+ * Lot struct
+ * quantity: amount of ingredients in the lot
+ * t_expiration: time of expiration of the ingredients
+ * next: pointer to the next lot of the same ingredient, in order of expiration date
+ */
+typedef struct LOT {
     int quantity;
-    int t_scadenza; 
+    int t_expiration;
     struct LOT *next;
-} lotto;
+} lot;
 
-typedef struct TAG{
-    char *nome;
-    lotto *stock;
+/**
+ * Tag lot struct, that contains all the lots of the same ingredient
+ * name: name of the ingredient
+ * stock: list of the lots with the same ingredient
+ * tot_quantity: total quantity of all the lots
+ * father: pointer to the father of the current tag in the tree
+ * left: pointer to the tag that comes before in alphabetic order
+ * right: pointer to the tag that comes after in alphabetic order
+ */
+typedef struct TAG {
+    char *name;
+    lot *stock;
     int tot_quantity;
-    struct TAG *padre;
+    struct TAG *father;
     struct TAG *left;
     struct TAG *right;
-} tag_lotto;
+} tag_lot;
 
-typedef struct ORD{
-    int tempo;
-    char *nome;
+/**
+ * Order struct
+ * time: time when the order is received
+ * name: name of the ordered product
+ * quantity: amount of ordered products
+ * weight: weight of the order
+ * this_recipe: pointer to the recipe of the ordered product
+ * is_waiting: whether the order is prepared or not
+ */
+typedef struct ORD {
+    int time;
+    char *name;
     int quantity;
-    int peso;
-    ingrediente *this_ricetta;
-    bool in_attesa;
-} ordine;
+    int weight;
+    ingredient *this_recipe;
+    bool is_waiting;
+} order;
 
-typedef struct ALT{
-    int tempo;
-    char *nome;
+/**
+ * Alt order struct, to store the orders while they are being taken by the courier
+ * time: time when the order is received
+ * name: name of the ordered product
+ * quantity: amount of the ordered products
+ * weight: weight of the order
+ * next: pointer to the next alt_order, ordered by descending weight
+ */
+typedef struct ALT {
+    int time;
+    char *name;
     int quantity;
-    int peso;
+    int weight;
     struct ALT *next;
-} alt_ordine;
+} alt_order;
 
-void scadenze(int, tag_lotto *[]);
-void scadenze_iterativo(int , tag_lotto *);
-void carica_ordine(ordine *, int, int);
-void aggiungi_ricetta(char[], ricetta *[], tag_lotto *[]);
-void rimuovi_ricetta(char[], ricetta *[], ordine *, int);
-void rifornimento(char[], tag_lotto *[], int);
-void ricontrolla_ordini(tag_lotto *[], ordine *, int);
-int nuovo_ordine(char[], ricetta *[], tag_lotto *[], int, ordine **, int);
-int next_word(char[], int, char[]);
-int trova_indice(char);
-int calcola_quantity(lotto *);
-bool check_ingredients_for_order(tag_lotto *[], ordine *);
-ricetta *ricerca_ricetta(ricetta *, char[]);
-tag_lotto *ricerca_lotto(tag_lotto *, char []);
-void libera_ricetta(ricetta *);
-void libera_lotti(tag_lotto *);
+void expiration(int, tag_lot *[]);
 
-int main()
-{
+void expiration_iterative(int, tag_lot *);
+
+void load_order(order *, int, int);
+
+void add_recipe(char [], recipe *[]);
+
+void remove_recipe(char [], recipe *[], order *, int);
+
+void restock(char [], tag_lot *[], int);
+
+void recheck_orders(tag_lot *[], order *, int);
+
+int new_order(char [], recipe *[], tag_lot *[], int, order **, int);
+
+int next_word(char [], int, char []);
+
+int find_index(char);
+
+int calculate_quantity(lot *);
+
+bool check_ingredients_for_order(tag_lot *[], order *);
+
+recipe *find_recipe(recipe *, char []);
+
+tag_lot *find_lot(tag_lot *, char []);
+
+void free_recipes(recipe *);
+
+void free_lots(tag_lot *);
+
+int main() {
     int delta_T = 0, max_load = 0, t = 0, dim_ordini = 0;
-    bool uscire = false;
-    char *istruzioni = NULL;
-    ricetta *ricettario[DIM_RICETTARIO] = {};
-    tag_lotto *magazzino[DIM_RICETTARIO] = {};
-    ordine *vettore_ordini = malloc(sizeof(ordine));
+    bool exit = false;
+    char *instruction = NULL;
+    recipe *recipe_book[DIM_RECETTEAR] = {};
+    tag_lot *warehouse[DIM_RECETTEAR] = {};
+    order *orders = malloc(sizeof(order));
 
-    istruzioni = malloc(sizeof(char) * STRING_MAX_LENGTH);
-    strcpy(istruzioni, "");
+    instruction = malloc(sizeof(char) * STRING_MAX_LENGTH);
+    strcpy(instruction, "");
 
-    if(fgets(istruzioni, STRING_MAX_LENGTH, stdin) != NULL)
-    {
-        sscanf(istruzioni, "%d %d", &delta_T, &max_load);
-        free(istruzioni);
-    }
-    else
+    if (fgets(instruction, STRING_MAX_LENGTH, stdin) != NULL) {
+        sscanf(instruction, "%d %d", &delta_T, &max_load);
+        free(instruction);
+    } else
         return 1;
 
-    while(!uscire)
-    {
-        scadenze(t, magazzino);
+    while (!exit) {
+        expiration(t, warehouse);
 
-        if(t != 0 && t%delta_T == 0)    //arrivo corriere
-            carica_ordine(vettore_ordini, dim_ordini, max_load);
+        if (t != 0 && t % delta_T == 0) //courier arrives
+            load_order(orders, dim_ordini, max_load);
 
         int buffer_size = STRING_MAX_LENGTH;
-        bool letto_tutto = false;
+        bool input_read = false;
         char *buffer = NULL;
         buffer = malloc(sizeof(char) * buffer_size);
-        istruzioni = malloc(sizeof(char) * buffer_size);
+        instruction = malloc(sizeof(char) * buffer_size);
         strcpy(buffer, "");
-        strcpy(istruzioni, "");
+        strcpy(instruction, "");
 
-        while(!letto_tutto)
-        {
+        while (!input_read) {
             char c = ' ';
             int j = 0;
 
-            if(fgets(buffer, buffer_size, stdin) != NULL)
-            {
-                strcat(istruzioni, buffer);
+            if (fgets(buffer, buffer_size, stdin) != NULL) {
+                strcat(instruction, buffer);
 
-                for(j = 0; j < buffer_size && c != '\n' && c != '\0'; j++)
-                {
+                for (j = 0; j < buffer_size && c != '\n' && c != '\0'; j++) {
                     c = buffer[j];
                 }
 
-                if(j == buffer_size)
-                {
-                    buffer_size = buffer_size*2;
+                if (j == buffer_size) {
+                    buffer_size = buffer_size * 2;
                     free(buffer);
                     buffer = malloc(sizeof(char) * buffer_size);
-                    istruzioni = realloc(istruzioni, sizeof(char) * (strlen(istruzioni) + buffer_size));
-                    letto_tutto = false;
+                    instruction = realloc(instruction, sizeof(char) * (strlen(instruction) + buffer_size));
+                    input_read = false;
+                } else {
+                    input_read = true;
                 }
-                else
-                {
-                    letto_tutto = true;
-                }
-            }
-            else
-            {
-                uscire = true;
-                letto_tutto = true;
+            } else {
+                exit = true;
+                input_read = true;
             }
         }
 
-        if(uscire != true)
-        {
+        if (exit != true) {
             char parola[STRING_MAX_LENGTH] = "";
-            sscanf(istruzioni, "%s", parola);
+            sscanf(instruction, "%s", parola);
 
-            if(strcmp(parola, "aggiungi_ricetta") == 0)    //AGGIUNGI RICETTE
+            if (strcmp(parola, "aggiungi_ricetta") == 0) //ADD RECIPES
             {
-                aggiungi_ricetta(istruzioni, ricettario, magazzino);
-            }
-            else if(strcmp(parola, "rimuovi_ricetta") == 0)   //RIMUOVI RICETTE
+                add_recipe(instruction, recipe_book);
+            } else if (strcmp(parola, "rimuovi_ricetta") == 0) //REMOVE RECIPES
             {
-                rimuovi_ricetta(istruzioni, ricettario, vettore_ordini, dim_ordini);
-            }
-            else if(strcmp(parola, "rifornimento") == 0)   //RIFORNIMENTO
+                remove_recipe(instruction, recipe_book, orders, dim_ordini);
+            } else if (strcmp(parola, "rifornimento") == 0) //RESTOCK
             {
-                rifornimento(istruzioni, magazzino, t);
-                ricontrolla_ordini(magazzino, vettore_ordini, dim_ordini);
-            }
-            else if(strcmp(parola, "ordine") == 0)   //ORDINE
+                restock(instruction, warehouse, t);
+                recheck_orders(warehouse, orders, dim_ordini);
+            } else if (strcmp(parola, "ordine") == 0) //ORDER
             {
-                dim_ordini = nuovo_ordine(istruzioni, ricettario, magazzino, t, &vettore_ordini, dim_ordini);
-            }
-            else    //COMANDO ERRATO O FINE ISTRUZIONI
+                dim_ordini = new_order(instruction, recipe_book, warehouse, t, &orders, dim_ordini);
+            } else //WRONG COMMAND OR INSTRUCTIONS END
             {
-                uscire = true;
+                exit = true;
             }
-            
+
             t++;
-            
         }
 
-        free(istruzioni);
+        free(instruction);
         free(buffer);
     }
 
-    //clean up delle memorie allocate dinamicamente
-    for(int i = 0; i < DIM_RICETTARIO; i++)
-    {
-        libera_ricetta(ricettario[i]);
+    //clean up of dynamically allocated memories
+    for (int i = 0; i < DIM_RECETTEAR; i++) {
+        free_recipes(recipe_book[i]);
     }
 
-    for(int i = 0; i < DIM_RICETTARIO; i++)
-    {
-        libera_lotti(magazzino[i]);
-    }
-    
-    for(int i = 0; i < dim_ordini; i ++)
-    {
-        if(vettore_ordini[i].tempo != -1)
-            free(vettore_ordini[i].nome);
+    for (int i = 0; i < DIM_RECETTEAR; i++) {
+        free_lots(warehouse[i]);
     }
 
-    free(vettore_ordini);
+    for (int i = 0; i < dim_ordini; i++) {
+        if (orders[i].time != -1)
+            free(orders[i].name);
+    }
+
+    free(orders);
 
     return 0;
 }
 
-//scorre l'intero magazzino e toglie gli ingredienti scaduti
-void scadenze(int t, tag_lotto *magazzino[])
-{
-    for(int i = 0; i < DIM_RICETTARIO; i++)     //NB: il magazzino suddivide i lotti per lettera e sono ordinate in ordine alfabetico
-        scadenze_iterativo(t, magazzino[i]);
-    
+/**
+ * Parses the entire warehouse and removes expired ingredients
+ * @param t current time
+ * @param warehouse warehouse to remove expired ingredients from
+ */
+void expiration(int t, tag_lot *warehouse[]) {
+    for (int i = 0; i < DIM_RECETTEAR; i++)
+        //NB: warehouse stores lots by letter, and they are sorted in alphabetic order
+        expiration_iterative(t, warehouse[i]);
+
     return;
 }
 
-//scorre un sottoalbero specifico del magazzino e toglie gli ingredienti scaduti (NB: i lotti veri e propri sono memorizzati come una lista)
-void scadenze_iterativo(int t, tag_lotto *current_nodo)
-{
-    if(current_nodo != NULL)
-    {
-        scadenze_iterativo(t, current_nodo->left);
+/**
+ * Parses a specific warehouse subtree and removes expired ingredients
+ * NB: lots are stored as a list
+ * @param t current time
+ * @param current_node current node of the tree
+ */
+void expiration_iterative(int t, tag_lot *current_node) {
+    if (current_node != NULL) {
+        expiration_iterative(t, current_node->left);
 
-        lotto *current_lotto = current_nodo->stock;
+        lot *current_lotto = current_node->stock;
         bool any_expired = false;
-            
-        while(current_lotto != NULL)
-        {
-            if(t >= current_lotto->t_scadenza)
-            {
-                lotto *da_eliminare = current_lotto;
+
+        while (current_lotto != NULL) {
+            if (t >= current_lotto->t_expiration) {
+                lot *da_eliminare = current_lotto;
                 current_lotto = current_lotto->next;
-                current_nodo->stock = current_lotto;
+                current_node->stock = current_lotto;
                 free(da_eliminare);
 
                 any_expired = true;
-            }
-            else
-            {
+            } else {
                 current_lotto = current_lotto->next;
             }
         }
 
-        if(any_expired)
-        {
-            current_nodo->tot_quantity = calcola_quantity(current_nodo->stock);
+        if (any_expired) {
+            current_node->tot_quantity = calculate_quantity(current_node->stock);
         }
 
-        scadenze_iterativo(t, current_nodo->right);
+        expiration_iterative(t, current_node->right);
     }
 }
 
-/*scorre la lista degli ordini pronti, prendendo tot ordini fino a riempire il corriere
-questi ordini presi vengono spostati in una nuova lista, ordinata per peso decrescente, che poi viene letta e liberata*/
-void carica_ordine(ordine *vettore_ordini, int dim_ordini, int max_load)
-{
+/**
+ * Parses orders and selects enough orders to fill the courier. Loaded orders are moved to a list (ordered by decreasing weight) to be printed and freed
+ * @param orders vector that contains all the received orders
+ * @param orders_dim dimension of orders
+ * @param max_load maximum load that the courier can carry
+ */
+void load_order(order *orders, int orders_dim, int max_load) {
     int current_load = 0;
-    alt_ordine *ordini_da_caricare = NULL, *temp = NULL, *prev = NULL, *current_ord = NULL;
+    alt_order *orders_to_load = NULL, *temp = NULL, *prev = NULL, *current_ord = NULL;
     bool is_full = false;
 
-    for(int i = 0; i < dim_ordini && !is_full; i++)
-    {
-        if(vettore_ordini[i].tempo != -1 && vettore_ordini[i].in_attesa == false)
-        {
-            if(current_load + vettore_ordini[i].peso <= max_load)
-            {
-                current_load += vettore_ordini[i].peso;
+    for (int i = 0; i < orders_dim && !is_full; i++) {
+        if (orders[i].time != -1 && orders[i].is_waiting == false) {
+            if (current_load + orders[i].weight <= max_load) {
+                current_load += orders[i].weight;
 
-                current_ord = malloc(sizeof(alt_ordine));
-                current_ord->nome = malloc(sizeof(char) * (strlen(vettore_ordini[i].nome) + 1));
-                strcpy(current_ord->nome, vettore_ordini[i].nome);
-                current_ord->peso = vettore_ordini[i].peso;
-                current_ord->quantity = vettore_ordini[i].quantity;
-                current_ord->tempo = vettore_ordini[i].tempo;
+                current_ord = malloc(sizeof(alt_order));
+                current_ord->name = malloc(sizeof(char) * (strlen(orders[i].name) + 1));
+                strcpy(current_ord->name, orders[i].name);
+                current_ord->weight = orders[i].weight;
+                current_ord->quantity = orders[i].quantity;
+                current_ord->time = orders[i].time;
 
-                if(ordini_da_caricare == NULL)  //la lista degli ordini da caricare è vuota
-                {
-                    ordini_da_caricare = current_ord;
+                if (orders_to_load == NULL) {
+                    //orders_to_load is empty
+                    orders_to_load = current_ord;
                     current_ord->next = NULL;
-                }
-                else    //la lista degli ordini da caricare non è vuota ==> metto il nuovo ordine ordinato per peso decrescente
-                {
-                    temp = ordini_da_caricare;
+                } else {
+                    //orders_to_load is not empty => puts the new order in the proper place
+                    temp = orders_to_load;
                     prev = NULL;
 
-                    while(temp != NULL && (current_ord->peso < temp->peso || (current_ord->peso == temp->peso && current_ord->tempo > temp->tempo)))
-                    {
+                    while (temp != NULL && (current_ord->weight < temp->weight || (
+                                                current_ord->weight == temp->weight && current_ord->time > temp->
+                                                time))) {
                         prev = temp;
                         temp = temp->next;
                     }
 
-                    if(prev == NULL)
-                    {
-                        current_ord->next = ordini_da_caricare;
-                        ordini_da_caricare = current_ord;
-                    }
-                    else
-                    {
+                    if (prev == NULL) {
+                        current_ord->next = orders_to_load;
+                        orders_to_load = current_ord;
+                    } else {
                         prev->next = current_ord;
                         current_ord->next = temp;
                     }
                 }
 
-                vettore_ordini[i].tempo = -1;
-                free(vettore_ordini[i].nome);
-            }
-            else
-            {
+                orders[i].time = -1;
+                free(orders[i].name);
+            } else {
                 is_full = true;
             }
         }
     }
 
-    if(ordini_da_caricare == NULL)
-    {
+    if (orders_to_load == NULL) {
         printf("camioncino vuoto\n");
-    }
-    else
-    {
-        while(ordini_da_caricare != NULL)
-        {
-            printf("%d %s %d\n", ordini_da_caricare->tempo, ordini_da_caricare->nome, ordini_da_caricare->quantity);
-            alt_ordine *da_eliminare = ordini_da_caricare;
-            ordini_da_caricare = ordini_da_caricare->next;
-            free(da_eliminare->nome);
+    } else {
+        while (orders_to_load != NULL) {
+            printf("%d %s %d\n", orders_to_load->time, orders_to_load->name, orders_to_load->quantity);
+            alt_order *da_eliminare = orders_to_load;
+            orders_to_load = orders_to_load->next;
+            free(da_eliminare->name);
             free(da_eliminare);
         }
     }
@@ -321,304 +354,277 @@ void carica_ordine(ordine *vettore_ordini, int dim_ordini, int max_load)
     return;
 }
 
-//scorre la lista associata alla prima lettera della ricetta e posiziona la nuova ricetta in ordine alfabetico
-void aggiungi_ricetta(char istruzioni[], ricetta *ricettario[], tag_lotto *magazzino[])
-{
-    //l'indice della ricetta nel vettore è pari a quello della prima lettera del nome della ricetta - 'a'
-    int cursor = strlen("aggiungi_ricetta "), indice = trova_indice(istruzioni[strlen("aggiungi_ricetta ")]), temp_int;
+/**
+ * Parses the alphabetically ordered list associated to the first letter of the new recipe and places it in the correct spot (if it's not already present)
+ * @param instruction string that contains the new recipe
+ * @param recipe_book vector that contains all recipes list (separated by the initial letter), which contains all the current recipes
+ */
+void add_recipe(char instruction[], recipe *recipe_book[]) {
+    //index of the recipe = first letter of the name of the recipe - 'a'
+    int cursor = strlen("aggiungi_ricetta "), index = find_index(instruction[strlen("aggiungi_ricetta ")]), temp_int;
     char temp_string[STRING_MAX_LENGTH] = "";
 
     //TREE-INSERT
-    cursor = next_word(istruzioni, cursor, temp_string);
-    ricetta *prev_ric = NULL, *curr_ric = ricettario[indice];
+    cursor = next_word(instruction, cursor, temp_string);
+    recipe *prev_ric = NULL, *curr_ric = recipe_book[index];
 
-    while(curr_ric != NULL)
-    {
+    while (curr_ric != NULL) {
         prev_ric = curr_ric;
-        temp_int = strcmp(temp_string, curr_ric->nome);
+        temp_int = strcmp(temp_string, curr_ric->name);
 
-        if(temp_int < 0)
-        {
+        if (temp_int < 0) {
             curr_ric = curr_ric->left;
-        }
-        else if(temp_int > 0)
-        {
+        } else if (temp_int > 0) {
             curr_ric = curr_ric->right;
-        }
-        else    //una ricetta con lo stesso nome è già presente
-        {
+        } else {
+            //a recipe with the same name is already present
             printf("ignorato\n");
             return;
         }
     }
-    
-    ricetta *new_recipe = malloc(sizeof(ricetta));
-    new_recipe->nome = malloc(sizeof(char) * (strlen(temp_string) + 1));
-    strcpy(new_recipe->nome, temp_string);
-    new_recipe->padre = prev_ric;
+
+    recipe *new_recipe = malloc(sizeof(recipe));
+    new_recipe->name = malloc(sizeof(char) * (strlen(temp_string) + 1));
+    strcpy(new_recipe->name, temp_string);
+    new_recipe->father = prev_ric;
     new_recipe->left = NULL;
     new_recipe->right = NULL;
-    
-    if(prev_ric == NULL)
-    {
-        ricettario[indice] = new_recipe;
-    }
-    else 
-    {
-        temp_int = strcmp(new_recipe->nome, prev_ric->nome);
-        if(temp_int < 0)
-        {
+
+    if (prev_ric == NULL) {
+        recipe_book[index] = new_recipe;
+    } else {
+        temp_int = strcmp(new_recipe->name, prev_ric->name);
+        if (temp_int < 0) {
             prev_ric->left = new_recipe;
-        }
-        else
-        {
+        } else {
             prev_ric->right = new_recipe;
         }
     }
-    //FINE TREE-INSERT
-    ingrediente *new_ing = malloc(sizeof(ingrediente));
+    //END TREE-INSERT
+
+    ingredient *new_ing = malloc(sizeof(ingredient));
     new_recipe->ing = new_ing;
-    
+
     strcpy(temp_string, "");
-    cursor = next_word(istruzioni, cursor, temp_string);
-    new_ing->nome = malloc(sizeof(char) * (strlen(temp_string) + 1));
-    strcpy(new_ing->nome, temp_string);
+    cursor = next_word(instruction, cursor, temp_string);
+    new_ing->name = malloc(sizeof(char) * (strlen(temp_string) + 1));
+    strcpy(new_ing->name, temp_string);
     strcpy(temp_string, "");
-    cursor = next_word(istruzioni, cursor, temp_string);
+    cursor = next_word(instruction, cursor, temp_string);
     new_ing->quantity = strtol(temp_string, NULL, 10);
     strcpy(temp_string, "");
     new_ing->next = NULL;
 
-    //mette il resto degli ingredienti in ordine alfabetico
-    while(cursor < strlen(istruzioni))
-    {
-        ingrediente *curr_ing = new_recipe->ing, *prev = NULL;
-        new_ing = malloc(sizeof(ingrediente));
+    //puts the rest of the ingredients in alphabetic order
+    while (cursor < strlen(instruction)) {
+        ingredient *curr_ing = new_recipe->ing, *prev = NULL;
+        new_ing = malloc(sizeof(ingredient));
 
-        cursor = next_word(istruzioni, cursor, temp_string);
-        new_ing->nome = malloc(sizeof(char) * (strlen(temp_string) + 1));
-        strcpy(new_ing->nome, temp_string);
+        cursor = next_word(instruction, cursor, temp_string);
+        new_ing->name = malloc(sizeof(char) * (strlen(temp_string) + 1));
+        strcpy(new_ing->name, temp_string);
         strcpy(temp_string, "");
-        cursor = next_word(istruzioni, cursor, temp_string);
+        cursor = next_word(instruction, cursor, temp_string);
         new_ing->quantity = strtol(temp_string, NULL, 10);
         strcpy(temp_string, "");
 
-        while(curr_ing != NULL && strcmp(curr_ing->nome, new_ing->nome) < 0)
-        {
+        while (curr_ing != NULL && strcmp(curr_ing->name, new_ing->name) < 0) {
             prev = curr_ing;
             curr_ing = curr_ing->next;
         }
 
         new_ing->next = curr_ing;
-        if(prev == NULL)
-        {
+        if (prev == NULL) {
             new_recipe->ing = new_ing;
-        }
-        else
-        {
+        } else {
             prev->next = new_ing;
         }
     }
-    
+
     printf("aggiunta\n");
     return;
 }
 
 //scorre la lista associata alla prima lettera della ricetta e cerca una ricetta col nome uguale a quella fornita in input, per poi eliminarla
-void rimuovi_ricetta(char istruzioni[], ricetta *ricettario[], ordine *vettore_ordini, int dim_ordini)
-{
-    char old_ricetta [STRING_MAX_LENGTH] = "";
-    int cursor = strlen("rimuovi_ricetta "), indice = trova_indice(istruzioni[strlen("rimuovi_ricetta ")]), temp_int = -1;
+/**
+ * Parses the "recipe first letter" list and searches for a recipe with the same name. If found, eliminates it
+ * @param instruction string that contains the name of the recipe to remove
+ * @param recipe_book vector with all the recipes
+ * @param orders vector that contains all the received orders
+ * @param orders_dim dimension of orders
+ */
+void remove_recipe(char instruction[], recipe *recipe_book[], order *orders, int orders_dim) {
+    char old_recipe[STRING_MAX_LENGTH] = "";
+    int cursor = strlen("rimuovi_ricetta "), index = find_index(instruction[strlen("rimuovi_ricetta ")]), temp_int = -1;
 
-    cursor = next_word(istruzioni, cursor, old_ricetta);
-    ricetta *temp_ric = ricettario[indice], *y = NULL, *x = NULL;
+    cursor = next_word(instruction, cursor, old_recipe);
+    recipe *temp_ric = recipe_book[index], *y = NULL, *x = NULL;
 
     //TREE-DELETE
-    while(temp_ric != NULL && temp_int != 0)
-    {
-        temp_int = strcmp(old_ricetta, temp_ric->nome);
-        if(temp_int < 0)
+    while (temp_ric != NULL && temp_int != 0) {
+        temp_int = strcmp(old_recipe, temp_ric->name);
+        if (temp_int < 0)
             temp_ric = temp_ric->left;
-        else if(temp_int > 0)
+        else if (temp_int > 0)
             temp_ric = temp_ric->right;
     }
 
-    if(temp_ric == NULL)
-    {
+    if (temp_ric == NULL) {
         printf("non presente\n");
         return;
     }
 
     bool is_on_standby = false;
-    for(int i = 0; i < dim_ordini && !is_on_standby; i++)   //scorro la lista di tutti gli ordini
-    {
-        if(vettore_ordini[i].tempo != -1 && strcmp(vettore_ordini[i].nome, old_ricetta) == 0)
+    //parses orders to find if the recipe has on standby orders
+    for (int i = 0; i < orders_dim && !is_on_standby; i++) {
+        if (orders[i].time != -1 && strcmp(orders[i].name, old_recipe) == 0)
             is_on_standby = true;
     }
 
-    if(is_on_standby)
-    {
+    if (is_on_standby) {
         printf("ordini in sospeso\n");
         return;
     }
 
-    if(temp_ric->left == NULL || temp_ric->right == NULL)
+    if (temp_ric->left == NULL || temp_ric->right == NULL)
         y = temp_ric;
-    else
-    {
+    else {
         //y = TREE-SUCCESSOR(temp_ric)
-        if(temp_ric->right != NULL)
-        {
+        if (temp_ric->right != NULL) {
             //y = TREE-MINIMUM(temp_ric->right)
-            ricetta *x = temp_ric->right;
-            while(x->left != NULL)
+            recipe *x = temp_ric->right;
+            while (x->left != NULL)
                 x = x->left;
             y = x;
-        }
-        else
-        {
-            ricetta *z = temp_ric->padre, *x = temp_ric;
-            while(z != NULL && x == z->right)
-            {
+        } else {
+            recipe *z = temp_ric->father, *x = temp_ric;
+            while (z != NULL && x == z->right) {
                 x = z;
-                z = z->padre;
+                z = z->father;
             }
 
             y = z;
         }
     }
 
-    if(y->left != NULL)
+    if (y->left != NULL)
         x = y->left;
     else
         x = y->right;
 
-    if(x != NULL)
-        x->padre = y->padre;
+    if (x != NULL)
+        x->father = y->father;
 
-    if(y->padre == NULL)
-        ricettario[indice] = x;
-    else if(y == y->padre->left)
-        y->padre->left = x;
+    if (y->father == NULL)
+        recipe_book[index] = x;
+    else if (y == y->father->left)
+        y->father->left = x;
     else
-        y->padre->right = x;
+        y->father->right = x;
 
-    if(y != temp_ric)
-    {
-        ingrediente *temp_ing = temp_ric->ing;
-        strcpy(temp_ric->nome, y->nome);
+    if (y != temp_ric) {
+        ingredient *temp_ing = temp_ric->ing;
+        strcpy(temp_ric->name, y->name);
         temp_ric->ing = y->ing;
         y->ing = temp_ing;
     }
 
-    while(y->ing != NULL)
-    {
-        ingrediente *da_eliminare = y->ing;
+    while (y->ing != NULL) {
+        ingredient *da_eliminare = y->ing;
         y->ing = y->ing->next;
-        free(da_eliminare->nome);
+        free(da_eliminare->name);
         free(da_eliminare);
     }
 
-    free(y->nome);
+    free(y->name);
     free(y);
     printf("rimossa\n");
 
     return;
 }
 
-/*scorre la stringa di istruzioni: per ogni terna parola-quantità-tempo di scadenza, 
-poi scorre la lista magazzino e inserisce il nuovo lotto in ordine crescente di tempo di scadenza*/
-void rifornimento(char istruzioni[], tag_lotto *magazzino[], int tempo)
-{
+/**
+ * For every triple "word-quantity-expiration time" in instruction, and places them in the warehouse in order of expiration time
+ * @param instruction string that contains the name of the recipe to remove
+ * @param warehouse warehouse to add the ingredients to
+ * @param t current time
+ */
+void restock(char instruction[], tag_lot *warehouse[], int t) {
     char ingrediente[STRING_MAX_LENGTH] = "", temp_int[STRING_MAX_LENGTH] = "";
     int amount = 0, expiration_date = 0, cursor = strlen("rifornimento "), indice;
 
-    while(cursor < strlen(istruzioni))
-    {
+    while (cursor < strlen(instruction)) {
         strcpy(ingrediente, "");
-        cursor = next_word(istruzioni, cursor, ingrediente);
+        cursor = next_word(instruction, cursor, ingrediente);
         strcpy(temp_int, "");
-        cursor = next_word(istruzioni, cursor, temp_int);
+        cursor = next_word(instruction, cursor, temp_int);
         amount = strtol(temp_int, NULL, 10);
         strcpy(temp_int, "");
-        cursor = next_word(istruzioni, cursor, temp_int);
+        cursor = next_word(instruction, cursor, temp_int);
         expiration_date = strtol(temp_int, NULL, 10);
-        
-        if(expiration_date > tempo)
-        {
-            indice = trova_indice(ingrediente[0]);
-            tag_lotto *current_tag = magazzino[indice], *prev_tag = NULL;
+
+        if (expiration_date > t) {
+            indice = find_index(ingrediente[0]);
+            tag_lot *current_tag = warehouse[indice], *prev_tag = NULL;
             bool tag_trovato = false;
 
             //TREE-INSERT
-            while(current_tag != NULL && !tag_trovato)
-            {
+            while (current_tag != NULL && !tag_trovato) {
                 prev_tag = current_tag;
-                int temp_int = strcmp(ingrediente, current_tag->nome);
+                int temp_int = strcmp(ingrediente, current_tag->name);
 
-                if(temp_int < 0)
+                if (temp_int < 0)
                     current_tag = current_tag->left;
-                else if(temp_int > 0)
+                else if (temp_int > 0)
                     current_tag = current_tag->right;
                 else
                     tag_trovato = true;
             }
 
-            if(!tag_trovato)    //un tag con quel nome non esiste => viene creato e inserito nel BST
-            {
-                tag_lotto *new = malloc(sizeof(tag_lotto));
-                new->nome = malloc(sizeof(char) * (strlen(ingrediente) + 1));
-                strcpy(new->nome, ingrediente);
+            if (!tag_trovato) {
+                //a tag with that name doesn't exist => creates a new tag and inserts it
+                tag_lot *new = malloc(sizeof(tag_lot));
+                new->name = malloc(sizeof(char) * (strlen(ingrediente) + 1));
+                strcpy(new->name, ingrediente);
                 new->tot_quantity = amount;
-                new->stock = malloc(sizeof(lotto));
+                new->stock = malloc(sizeof(lot));
                 new->stock->quantity = amount;
-                new->stock->t_scadenza = expiration_date;
+                new->stock->t_expiration = expiration_date;
                 new->stock->next = NULL;
                 new->left = NULL;
                 new->right = NULL;
-                new->padre = prev_tag;
+                new->father = prev_tag;
 
-                if(prev_tag == NULL)
-                {
-                    magazzino[indice] = new;
-                }
-                else if(strcmp(new->nome, prev_tag->nome) < 0)
-                {
+                if (prev_tag == NULL) {
+                    warehouse[indice] = new;
+                } else if (strcmp(new->name, prev_tag->name) < 0) {
                     prev_tag->left = new;
-                }
-                else
-                {
+                } else {
                     prev_tag->right = new;
                 }
-            }
-            else    //un tag con quel nome esiste già => inserisco il lotto nella lista
-            {
-                lotto *current_lot = current_tag->stock, *prev_lot = NULL;
+            } else {
+                //a tag with that name already exists => inserts the lot in the list
+                lot *current_lot = current_tag->stock, *prev_lot = NULL;
 
-                while(current_lot != NULL && current_lot->t_scadenza < expiration_date)
-                {
+                while (current_lot != NULL && current_lot->t_expiration < expiration_date) {
                     prev_lot = current_lot;
                     current_lot = current_lot->next;
                 }
 
-                if(current_lot == NULL || current_lot->t_scadenza != expiration_date)  //un lotto con la stessa data di scadenza non esiste => creo un nuovo lotto
-                {
-                    lotto *new = malloc(sizeof(lotto));
+                if (current_lot == NULL || current_lot->t_expiration != expiration_date) {
+                    //a lot with the same expiration date doesn't exist => creates a new lot
+                    lot *new = malloc(sizeof(lot));
                     new->quantity = amount;
-                    new->t_scadenza = expiration_date;
+                    new->t_expiration = expiration_date;
                     new->next = current_lot;
 
-                    if(prev_lot == NULL)
-                    {
+                    if (prev_lot == NULL) {
                         current_tag->stock = new;
-                    }
-                    else
-                    {
+                    } else {
                         prev_lot->next = new;
                     }
-                }
-                else    //un lotto con quella data di scadenza esiste già => update della sua quantità
-                {
+                } else {
+                    //a lot with the same expiration date already exists => updates its quantity
                     current_lot->quantity += amount;
                 }
 
@@ -626,168 +632,180 @@ void rifornimento(char istruzioni[], tag_lotto *magazzino[], int tempo)
             }
         }
     }
-    
+
     printf("rifornito\n");
     return;
 }
 
-void ricontrolla_ordini(tag_lotto *magazzino[], ordine *vettore_ordini, int dim_ordini)
-{
-    for(int i = 0; i < dim_ordini; i++)  //scorre il vettore per gli ordini in attesa  
-    {
-        if(vettore_ordini[i].tempo != -1 && vettore_ordini[i].in_attesa == true && check_ingredients_for_order(magazzino, &vettore_ordini[i]))
-        {
-            vettore_ordini[i].in_attesa = false;
+/**
+ * Parses the orders to check if some stand-by orders can now be prepared
+ * @param warehouse warehouse to check the stored ingredients
+ * @param orders vector that contains all the received orders
+ * @param orders_dim dimension of orders
+ */
+void recheck_orders(tag_lot *warehouse[], order *orders, int orders_dim) {
+    for (int i = 0; i < orders_dim; i++) {
+        if (orders[i].time != -1 && orders[i].is_waiting == true && check_ingredients_for_order(
+                warehouse, &orders[i])) {
+            orders[i].is_waiting = false;
         }
     }
 
     return;
 }
 
-int nuovo_ordine(char istruzioni[], ricetta *ricettario[], tag_lotto *magazzino[], int t, ordine **vettore_ordini, int dim_ordini)
-{
+/**
+ * Creates a new order (if there's a recipe with the same name), and checks if it can be prepared
+ * @param instruction string with the new order
+ * @param recipe_book vector with all the recipes
+ * @param warehouse warehouse with the ingredients, to check if the new order can be prepared
+ * @param t current time
+ * @param orders vector that contains all the received orders, to be updated with the new order
+ * @param orders_dim dimension of orders
+ * @return updated orders_dim
+ */
+int new_order(char instruction[], recipe *recipe_book[], tag_lot *warehouse[], int t, order **orders, int orders_dim) {
     char nome_ordine[STRING_MAX_LENGTH] = "", num_temp[STRING_MAX_LENGTH] = "";
-    int quantity_ricetta = 0, cursor = strlen("ordine "), indice = trova_indice(istruzioni[strlen("ordine ")]);
-    ricetta *current_rec = NULL;
+    int quantity_ricetta = 0, cursor = strlen("ordine "), indice = find_index(instruction[strlen("ordine ")]);
+    recipe *current_rec = NULL;
 
-    cursor = next_word(istruzioni, cursor, nome_ordine);
-    cursor = next_word(istruzioni, cursor, num_temp);
+    cursor = next_word(instruction, cursor, nome_ordine);
+    cursor = next_word(instruction, cursor, num_temp);
     quantity_ricetta = strtol(num_temp, NULL, 10);
 
-    current_rec = ricerca_ricetta(ricettario[indice], nome_ordine);
+    current_rec = find_recipe(recipe_book[indice], nome_ordine);
 
-    if(current_rec == NULL || strcmp(current_rec->nome, nome_ordine) != 0)   //la ricetta non è presente nel ricettario
-    {
+    if (current_rec == NULL || strcmp(current_rec->name, nome_ordine) != 0) {
+        //the recipe with that name isn't present in the recipe book
         printf("rifiutato\n");
-    }
-    else    //la ricetta è presente nel ricettario => realloc di vettore_ordini con una cella in più
-    {
+    } else {
+        //the recipe is precent in the recipe book => realloc of orders with an extra cell
         printf("accettato\n");
 
-        (*vettore_ordini) = realloc((*vettore_ordini), sizeof(ordine) * (dim_ordini + 1));
-        
-        (*vettore_ordini)[dim_ordini].nome = malloc(sizeof(char) * (strlen(nome_ordine) + 1));
-        strcpy((*vettore_ordini)[dim_ordini].nome, nome_ordine);
-        (*vettore_ordini)[dim_ordini].peso = 0;
-        (*vettore_ordini)[dim_ordini].quantity = quantity_ricetta;
-        (*vettore_ordini)[dim_ordini].tempo = t;
-        (*vettore_ordini)[dim_ordini].this_ricetta = current_rec->ing;
-        (*vettore_ordini)[dim_ordini].in_attesa = !check_ingredients_for_order(magazzino, &(*vettore_ordini)[dim_ordini]);
+        (*orders) = realloc((*orders), sizeof(order) * (orders_dim + 1));
 
-        dim_ordini++;
+        (*orders)[orders_dim].name = malloc(sizeof(char) * (strlen(nome_ordine) + 1));
+        strcpy((*orders)[orders_dim].name, nome_ordine);
+        (*orders)[orders_dim].weight = 0;
+        (*orders)[orders_dim].quantity = quantity_ricetta;
+        (*orders)[orders_dim].time = t;
+        (*orders)[orders_dim].this_recipe = current_rec->ing;
+        (*orders)[orders_dim].is_waiting = !check_ingredients_for_order(warehouse, &(*orders)[orders_dim]);
+
+        orders_dim++;
     }
 
-    return dim_ordini;
+    return orders_dim;
 }
 
-//controlla gli ingredienti del magazzino: se sono abbastanza per l'ordine, lo mette direttamente nella lista degli ordini pronti
-bool check_ingredients_for_order(tag_lotto *magazzino[], ordine *current_ordine)
-{
-    ingrediente *current_ing = current_ordine->this_ricetta;
-    tag_lotto *current_tag = NULL;
-    int quantity = current_ordine->quantity;
+/**
+ * Checks the ingredients in the warehouse: if there are enough for the order, it's prepared
+ * @param warehouse warehouse to check the ingredients
+ * @param current_order order to check the ingredients for
+ * @return false if the order couldn't be prepared, true otherwise
+ */
+bool check_ingredients_for_order(tag_lot *warehouse[], order *current_order) {
+    ingredient *current_ing = current_order->this_recipe;
+    tag_lot *current_tag = NULL;
+    int quantity = current_order->quantity;
     bool enough_ingredients = true;
 
-    while(current_ing != NULL && enough_ingredients)    //scorre gli ingredienti della ricetta
-    {
-        current_tag = ricerca_lotto(magazzino[trova_indice(current_ing->nome[0])], current_ing->nome);
+    while (current_ing != NULL && enough_ingredients) {
+        //parses the recipe ingredients
+        current_tag = find_lot(warehouse[find_index(current_ing->name[0])], current_ing->name);
 
-        if(current_tag == NULL || current_tag->tot_quantity < current_ing->quantity * quantity)
-        {
+        if (current_tag == NULL || current_tag->tot_quantity < current_ing->quantity * quantity) {
             enough_ingredients = false;
-        }
-        else
-        {
+        } else {
             current_ing = current_ing->next;
         }
     }
 
-    if(enough_ingredients)  //se ci sono abbastanza ingredienti, tolgo quelli usati dal magazzino
-    {
-        current_ing = current_ordine->this_ricetta;
+    if (enough_ingredients) {
+        //if there are enough ingredients, removes used ones from the warehouse
+        current_ing = current_order->this_recipe;
         int peso = 0, current_ing_quantity = 0;
-        
-        while(current_ing != NULL)
-        {
-            current_tag = ricerca_lotto(magazzino[trova_indice(current_ing->nome[0])], current_ing->nome);
+
+        while (current_ing != NULL) {
+            current_tag = find_lot(warehouse[find_index(current_ing->name[0])], current_ing->name);
             current_ing_quantity = current_ing->quantity * quantity;
             peso += current_ing_quantity;
 
-            //IN TEORIA non serve controllare che current_tag sia != da NULL
-            lotto *current_lot = current_tag->stock;
+            //IN THEORY, it shouldn't be necessary to check if current_tag != NULL
+            lot *current_lot = current_tag->stock;
 
-            while(current_lot != NULL && current_ing_quantity > 0)
-            {
-                if(current_ing_quantity >= current_lot->quantity)
-                {
+            while (current_lot != NULL && current_ing_quantity > 0) {
+                if (current_ing_quantity >= current_lot->quantity) {
                     current_ing_quantity -= current_lot->quantity;
 
-                    lotto *da_eliminare = current_lot;
+                    lot *da_eliminare = current_lot;
                     current_lot = current_lot->next;
                     current_tag->stock = current_lot;
-                    
+
                     free(da_eliminare);
-                }
-                else
-                {
+                } else {
                     current_lot->quantity -= current_ing_quantity;
                     current_ing_quantity = 0;
                 }
             }
 
-            current_tag->tot_quantity = calcola_quantity(current_tag->stock);
-            
+            current_tag->tot_quantity = calculate_quantity(current_tag->stock);
+
             current_ing = current_ing->next;
         }
 
-        current_ordine->peso = peso;
+        current_order->weight = peso;
     }
-    
-    return(enough_ingredients);
+
+    return (enough_ingredients);
 }
 
-//funzione che prende come input un vettore frase e copia una parola che inizia da "frase[indice]" in un altro vettore
-int next_word(char frase[], int indice, char parola[])
-{
-    int i = 0, lunghezza = strlen(frase);
+/**
+ * From a phrase vector, copies a word that starts from "phrase[index]" in the word vector
+ * @param phrase
+ * @param index
+ * @param word
+ * @return index of the following word
+ */
+int next_word(char phrase[], int index, char word[]) {
+    int i = 0, lunghezza = strlen(phrase);
     char empty[STRING_MAX_LENGTH] = "";
-    strcpy(parola, empty);
+    strcpy(word, empty);
 
-    while(indice < lunghezza && frase[indice] != ' ' && frase[indice] != '\0' && frase[indice] != '\n' && frase[indice] != '\r')
-    {
-        parola[i] = frase[indice];
+    while (index < lunghezza && phrase[index] != ' ' && phrase[index] != '\0' && phrase[index] != '\n' && phrase[index]
+           != '\r') {
+        word[i] = phrase[index];
         i++;
-        indice++;
+        index++;
     }
 
-    parola[i] = '\0';
-    return ++indice;
+    word[i] = '\0';
+    return ++index;
 }
 
-//dato un carattere, da come output l'indice della sua cella corrispondente
-int trova_indice(char c)
-{
-    if('a' <= c && c <= 'z')
-    {
-        return(c - 'a' + 'Z' - 'A' + 1);
-    }
-    else if('A' <= c && c <= 'Z')
-    {
-        return(c - 'A');
-    }
-    else
-    {
-        return(DIM_RICETTARIO - 1);
+/**
+ * @param c character
+ * @return index of the corresponding cell of c in the recipe book
+ */
+int find_index(char c) {
+    if ('a' <= c && c <= 'z') {
+        return (c - 'a' + 'Z' - 'A' + 1);
+    } else if ('A' <= c && c <= 'Z') {
+        return (c - 'A');
+    } else {
+        return (DIM_RECETTEAR - 1);
     }
 }
 
-int calcola_quantity(lotto *temp)
-{
-    lotto *current_lot = temp;
+/**
+ * @param temp lot to calculate the quantity of
+ * @return the quantity of ingredients in the given lot
+ */
+int calculate_quantity(lot *temp) {
+    lot *current_lot = temp;
     int tot_quantity = 0;
 
-    while(current_lot != NULL)
-    {
+    while (current_lot != NULL) {
         tot_quantity += current_lot->quantity;
         current_lot = current_lot->next;
     }
@@ -795,77 +813,87 @@ int calcola_quantity(lotto *temp)
     return tot_quantity;
 }
 
-//TREE-SEARCH per ricetta
-ricetta *ricerca_ricetta(ricetta *x, char k[])
-{
-    if(x == NULL)
+/**
+ * TREE-SEARCH for recipe
+ * @param x head of the current subtree
+ * @param k name of the recipe to search
+ * @return the recipe, or null if not found
+ */
+recipe *find_recipe(recipe *x, char k[]) {
+    if (x == NULL)
         return x;
-    
-    int temp_int = strcmp(k, x->nome);
 
-    if(temp_int == 0)
+    int temp_int = strcmp(k, x->name);
+
+    if (temp_int == 0)
         return x;
-    else if(temp_int < 0)
-        return ricerca_ricetta(x->left, k);
+    else if (temp_int < 0)
+        return find_recipe(x->left, k);
     else
-        return ricerca_ricetta(x->right, k);
+        return find_recipe(x->right, k);
 }
 
-//TREE-SEARCH per tag_lotto
-tag_lotto *ricerca_lotto(tag_lotto *x, char k[])
-{
-    if(x == NULL)
+/**
+ * TREE-SEARCH for tag_lot
+ * @param x head of the current subtree
+ * @param k name of the ingredient to search the lot of
+ * @return the lot, or null if not found
+ */
+tag_lot *find_lot(tag_lot *x, char k[]) {
+    if (x == NULL)
         return x;
 
-    int temp_int = strcmp(k, x->nome);
+    int temp_int = strcmp(k, x->name);
 
-    if(temp_int == 0)
+    if (temp_int == 0)
         return x;
-    else if(temp_int < 0)
-        return ricerca_lotto(x->left, k);
+    else if (temp_int < 0)
+        return find_lot(x->left, k);
     else
-        return ricerca_lotto(x->right, k);
+        return find_lot(x->right, k);
 }
 
-void libera_ricetta(ricetta *temp)
-{
-    if(temp != NULL)
-    {
-        libera_ricetta(temp->left);
-        libera_ricetta(temp->right);
+/**
+ * Recursively deallocates the temp recipe tree
+ * @param temp head of the current recipe subtree
+ */
+void free_recipes(recipe *temp) {
+    if (temp != NULL) {
+        free_recipes(temp->left);
+        free_recipes(temp->right);
 
-        while(temp->ing != NULL)
-        {
-            ingrediente *da_eliminare = temp->ing;
+        while (temp->ing != NULL) {
+            ingredient *da_eliminare = temp->ing;
             temp->ing = temp->ing->next;
-            free(da_eliminare->nome);
+            free(da_eliminare->name);
             free(da_eliminare);
         }
 
-        ricetta *da_eliminare = temp;
-        free(da_eliminare->nome);
+        recipe *da_eliminare = temp;
+        free(da_eliminare->name);
         free(da_eliminare);
     }
 
     return;
 }
 
-void libera_lotti(tag_lotto *temp)
-{
-    if(temp != NULL)
-    {
-        libera_lotti(temp->left);
-        libera_lotti(temp->right);
+/**
+ * Recursively deallocates the temp lot tree
+ * @param temp head of the current lot subtree
+ */
+void free_lots(tag_lot *temp) {
+    if (temp != NULL) {
+        free_lots(temp->left);
+        free_lots(temp->right);
 
-        while(temp->stock != NULL)
-        {
-            lotto *da_eliminare = temp->stock;
+        while (temp->stock != NULL) {
+            lot *da_eliminare = temp->stock;
             temp->stock = temp->stock->next;
             free(da_eliminare);
         }
 
-        tag_lotto *da_eliminare = temp;
-        free(da_eliminare->nome);
+        tag_lot *da_eliminare = temp;
+        free(da_eliminare->name);
         free(da_eliminare);
     }
 }
