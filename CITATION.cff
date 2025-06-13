@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+title: API Project @ PoliMi, 2024
+message: >-
+  If you use this software, please cite it as written.
+type: software
+authors:
+  - given-names: Michele
+    family-names: Sangaletti
+    email: mssuperlol@gmail.com
+url: https://github.com/mssuperlol/API_project
