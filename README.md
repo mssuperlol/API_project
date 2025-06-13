@@ -9,5 +9,5 @@ API Project @ PoliMi 2024. Original submission (in Italian) in docs folder. For 
 - Debugging: `printf()` spam, GDB for emergencies;
 - File differences: [Meld](https://meldmerge.org);
 - Performance analysis: [Valgrind](https://valgrind.org):
-  - [Callgrind] for execution time;
-  - [Massif] for memory.
+  - Callgrind for execution time;
+  - Massif for memory.
